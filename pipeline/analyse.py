@@ -30,62 +30,63 @@ SIMILARITY_THRESHOLD = 0.5
 MODEL_NAME = "all-MiniLM-L6-v2"
 
 ALBUM_COLOURS = {
-    "Man Alive":     "#4e79a7",
-    "Arc":           "#f28e2b",
+    "Man Alive": "#4e79a7",
+    "Arc": "#f28e2b",
     "Get to Heaven": "#e15759",
     "A Fever Dream": "#76b7b2",
     "Raw Data Feel": "#59a14f",
-    "Re-Animator":   "#edc948",
-    "Mountainhead":  "#b07aa1",
+    "Re-Animator": "#edc948",
+    "Mountainhead": "#b07aa1",
 }
 
 THEME_TAXONOMY = [
-  "apocalyptic imagery",
-  "authenticity versus illusion",
-  "biological transformation",
-  "bodily autonomy loss",
-  "capitalist dehumanization",
-  "choice and agency",
-  "collective delusion",
-  "collective transcendence",
-  "commodification of experience",
-  "communication breakdown",
-  "conformity and control",
-  "consciousness fragmentation",
-  "cosmic catastrophe",
-  "cyclical decay",
-  "death and mortality",
-  "dehumanization",
-  "desire for connection",
-  "digital manipulation",
-  "disconnection and alienation",
-  "existential crisis",
-  "exploitation of the masses",
-  "identity dissolution",
-  "inevitable destruction",
-  "inherited trauma",
-  "isolation and desperation",
-  "loss of agency",
-  "memory and trauma",
-  "moral corruption",
-  "mortality anxiety",
-  "obsessive desire",
-  "self-destruction",
-  "societal collapse",
-  "surveillance and paranoia",
-  "systemic oppression",
-  "toxic codependency",
-  "transformation and metamorphosis"
+    "apocalyptic imagery",
+    "authenticity versus illusion",
+    "biological transformation",
+    "bodily autonomy loss",
+    "capitalist dehumanization",
+    "choice and agency",
+    "collective delusion",
+    "collective transcendence",
+    "commodification of experience",
+    "communication breakdown",
+    "conformity and control",
+    "consciousness fragmentation",
+    "cosmic catastrophe",
+    "cyclical decay",
+    "death and mortality",
+    "dehumanization",
+    "desire for connection",
+    "digital manipulation",
+    "disconnection and alienation",
+    "existential crisis",
+    "exploitation of the masses",
+    "identity dissolution",
+    "inevitable destruction",
+    "inherited trauma",
+    "isolation and desperation",
+    "loss of agency",
+    "memory and trauma",
+    "moral corruption",
+    "mortality anxiety",
+    "obsessive desire",
+    "self-destruction",
+    "societal collapse",
+    "surveillance and paranoia",
+    "systemic oppression",
+    "toxic codependency",
+    "transformation and metamorphosis",
 ]
 
 # ---------------------------------------------------------------------------
 # Lyrics cleaning
 # ---------------------------------------------------------------------------
 
+
 def clean_lyrics(lyrics: str) -> str:
-    lyrics = re.sub(r'\[.*?\]', '', lyrics)
-    lyrics = re.sub(r'^\d+\s*$', '', lyrics, flags=re.MULTILINE)
-    lyrics = re.sub(r'\n{3,}', '\n\n', lyrics)
+    lyrics = re.sub(r"\[.*?\]", "", lyrics)
+    lyrics = re.sub(r"^\d+\s*$", "", lyrics, flags=re.MULTILINE)
+    lyrics = re.sub(r"\n{3,}", "\n\n", lyrics)
     return lyrics.strip()
 
 
@@ -93,7 +94,10 @@ def clean_lyrics(lyrics: str) -> str:
 # Theme extraction via Claude
 # ---------------------------------------------------------------------------
 
-def extract_themes(title: str, album: str, lyrics: str, client: anthropic.Anthropic) -> list[str]:
+
+def extract_themes(
+    title: str, album: str, lyrics: str, client: anthropic.Anthropic
+) -> list[str]:
     """
     Ask Claude to tag a song with 3-5 themes from the fixed taxonomy.
     Returns a subset of THEME_TAXONOMY.
@@ -113,15 +117,15 @@ Lyrics:
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=200,
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
     )
 
     raw = message.content[0].text.strip()
 
     # Strip markdown code fences if present
-    raw = re.sub(r'^```json\s*', '', raw)
-    raw = re.sub(r'^```\s*', '', raw)
-    raw = re.sub(r'\s*```$', '', raw)
+    raw = re.sub(r"^```json\s*", "", raw)
+    raw = re.sub(r"^```\s*", "", raw)
+    raw = re.sub(r"\s*```$", "", raw)
 
     try:
         themes = json.loads(raw)
@@ -136,6 +140,7 @@ Lyrics:
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
+
 
 def main():
     print("Loading lyrics...")
@@ -161,7 +166,7 @@ def main():
     client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
     for i, song in enumerate(songs):
-        print(f"  [{i+1}/{len(songs)}] {song['title']}")
+        print(f"  [{i + 1}/{len(songs)}] {song['title']}")
         song["themes"] = extract_themes(
             song["title"], song["album"], song["lyrics"], client
         )
@@ -170,14 +175,16 @@ def main():
     # Build nodes
     nodes = []
     for i, song in enumerate(songs):
-        nodes.append({
-            "id": i,
-            "title": song["title"],
-            "album": song["album"],
-            "year": song["year"],
-            "colour": ALBUM_COLOURS.get(song["album"], "#aaaaaa"),
-            "themes": song["themes"],
-        })
+        nodes.append(
+            {
+                "id": i,
+                "title": song["title"],
+                "album": song["album"],
+                "year": song["year"],
+                "colour": ALBUM_COLOURS.get(song["album"], "#aaaaaa"),
+                "themes": song["themes"],
+            }
+        )
 
     # Build combined edges
     # Score = 0.5 * embedding_similarity + 0.5 * (shared_themes / max_possible_shared)
@@ -200,24 +207,33 @@ def main():
             combined = (LYRICAL_WEIGHT * emb_score) + (THEMATIC_WEIGHT * theme_score)
 
             if combined >= COMBINED_THRESHOLD:
-                edges.append({
-                    "source": i,
-                    "target": j,
-                    "weight": round(combined, 4),
-                    "lyrical": round(emb_score, 4),
-                    "thematic": round(theme_score, 4),
-                    "shared_themes": shared,
-                    "shared_count": len(shared),
-                })
+                edges.append(
+                    {
+                        "source": i,
+                        "target": j,
+                        "weight": round(combined, 4),
+                        "lyrical": round(emb_score, 4),
+                        "thematic": round(theme_score, 4),
+                        "shared_themes": shared,
+                        "shared_count": len(shared),
+                    }
+                )
 
-    print(f"\nBuilt {len(nodes)} nodes and {len(edges)} edges (threshold={COMBINED_THRESHOLD})")
+    print(
+        f"\nBuilt {len(nodes)} nodes and {len(edges)} edges (threshold={COMBINED_THRESHOLD})"
+    )
 
     OUTPUT_PATH.parent.mkdir(exist_ok=True)
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        json.dump({
-            "nodes": nodes,
-            "edges": edges,
-        }, f, indent=2, ensure_ascii=False)
+        json.dump(
+            {
+                "nodes": nodes,
+                "edges": edges,
+            },
+            f,
+            indent=2,
+            ensure_ascii=False,
+        )
 
     print(f"Saved graph data to {OUTPUT_PATH}")
 

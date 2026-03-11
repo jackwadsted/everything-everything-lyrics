@@ -52,7 +52,7 @@ Source themes:
     message = client.messages.create(
         model="claude-haiku-4-5-20251001",
         max_tokens=1000,
-        messages=[{"role": "user", "content": prompt}]
+        messages=[{"role": "user", "content": prompt}],
     )
 
     raw = message.content[0].text.strip()
@@ -64,7 +64,9 @@ Source themes:
         for i, theme in enumerate(taxonomy, 1):
             print(f"  {i:2}. {theme}")
         print(f"\nTotal: {len(taxonomy)} themes")
-        print("\nEdit this list as you see fit, then paste it into analyse.py as THEME_TAXONOMY.")
+        print(
+            "\nEdit this list as you see fit, then paste it into analyse.py as THEME_TAXONOMY."
+        )
 
         # Also save to a file for easy editing
         out = Path("../data/taxonomy_draft.json")
