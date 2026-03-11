@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Everything Everything | Lyrical Universe</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Barlow+Condensed:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #080a0f;
+    --surface: #0e1118;
+    --border: #1e2433;
+    --text: #c8d0e0;
+    --text-dim: #4a5470;
+    --text-bright: #eef2ff;
+    --accent: #7b8cff;
+    --accent-dim: #2a3060;
+    --edge-base: #1e2a40;
+    --edge-embedding: #3a5070;
+    --edge-theme: #4a6090;
+    --panel-width: 340px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow Condensed', sans-serif;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 100;
+    opacity: 0.4;
+  }
+
+  header {
+    padding: 14px 28px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    background: var(--surface);
+    gap: 24px;
+  }
+
+  .header-left {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+  }
+
+  header h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-bright);
+    white-space: nowrap;
+  }
+
+  header p {
+    font-size: 13px;
+    color: var(--text-dim);
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+  }
+
+  .slider-control {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .slider-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+
+  #thresholdSlider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 120px;
+    height: 2px;
+    background: var(--border);
+    outline: none;
+    cursor: pointer;
+  }
+
+  #thresholdSlider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 10px;
+    height: 10px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: background 0.15s;
+  }
+
+  #thresholdSlider::-webkit-slider-thumb:hover { background: var(--text); }
+
+  #thresholdValue {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    width: 28px;
+    text-align: right;
+  }
+
+  .main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  #graph {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  svg { width: 100%; height: 100%; }
+
+  /* Edge — colour and opacity driven by weight in JS */
+  .link {
+    stroke-linecap: round;
+    transition: stroke 0.2s, stroke-opacity 0.2s;
+  }
+
+  .link.highlighted {
+    stroke-opacity: 1 !important;
+  }
+
+  .node circle {
+    stroke: var(--bg);
+    stroke-width: 1.5px;
+    cursor: pointer;
+    transition: filter 0.15s;
+  }
+
+  .node circle:hover { filter: brightness(1.4); }
+  .node.selected circle { stroke: #fff; stroke-width: 2px; filter: brightness(1.5); }
+  .node.dimmed circle { opacity: 0.12; }
+  .node.dimmed text { opacity: 0 !important; }
+
+  .node text {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 20px;
+    fill: var(--text);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    letter-spacing: 0.03em;
+  }
+
+  .node:hover text, .node.selected text { opacity: 1; }
+
+  /* Legend */
+  #legend {
+    position: absolute;
+    bottom: 24px;
+    left: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 22px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s;
+  }
+
+  .legend-item:hover { color: var(--text); }
+  .legend-item.muted { opacity: 0.3; }
+
+  .legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Panel */
+  #panel {
+    width: var(--panel-width);
+    border-left: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    flex-direction: column;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  #panel.open { transform: translateX(0); }
+
+  .panel-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-album {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+
+  .panel-title {
+    font-size: 52px;
+    font-weight: 700;
+    color: var(--text-bright);
+    line-height: 1.1;
+    letter-spacing: 0.02em;
+  }
+
+  .panel-year {
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+
+  .panel-section {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-section-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  .themes {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .theme-tag {
+    background: var(--accent-dim);
+    color: var(--accent);
+    font-size: 22px;
+    letter-spacing: 0.05em;
+    padding: 4px 10px;
+    border: 1px solid #3a4480;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-weight: 400;
+  }
+
+  .connections {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    overflow-y: auto;
+    flex: 1;
+  }
+
+  .connection-item {
+    display: flex;
+    align-items: center;
+    padding: 7px 10px;
+    cursor: pointer;
+    transition: background 0.1s;
+    border: 1px solid transparent;
+    gap: 10px;
+  }
+
+  .connection-item:hover { background: var(--border); border-color: var(--border); }
+
+  .connection-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .connection-info { flex: 1; min-width: 0; }
+
+  .connection-title {
+    font-size: 26px;
+    color: var(--text);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+
+  .connection-meta {
+    font-size: 18px;
+    color: var(--text-dim);
+    margin-top: 1px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.04em;
+  }
+
+  .connection-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    text-align: right;
+  }
+
+  .close-btn {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    z-index: 10;
+  }
+
+  .close-btn:hover { color: var(--text); border-color: var(--text-dim); }
+
+  /* Tooltip */
+  #tooltip {
+    position: fixed;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 12px 16px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    max-width: 280px;
+    z-index: 50;
+  }
+
+  #tooltip.visible { opacity: 1; }
+
+  .tooltip-songs {
+    font-size: 24px;
+    font-weight: 600;
+    color: var(--text-bright);
+    letter-spacing: 0.03em;
+    margin-bottom: 8px;
+    line-height: 1.4;
+  }
+
+  .tooltip-songs span { color: var(--text-dim); font-weight: 400; }
+
+  .tooltip-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    margin-top: 8px;
+  }
+
+  .tooltip-themes { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  .tooltip-theme {
+    font-size: 20px;
+    padding: 2px 8px;
+    border: 1px solid #3a4480;
+    color: var(--accent);
+    background: var(--accent-dim);
+    letter-spacing: 0.04em;
+  }
+
+  #hint {
+    position: absolute;
+    bottom: 24px;
+    right: 24px;
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    color: var(--text-dim);
+    letter-spacing: 0.08em;
+    pointer-events: none;
+    transition: opacity 0.5s;
+  }
+
+  #loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg);
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    letter-spacing: 0.15em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.3; }
+    50% { opacity: 1; }
+  }
+
+  #loading span { animation: pulse 1.4s ease-in-out infinite; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Everything<br>Everything</h1>
+    <p id="headerStats">Lyrical Universe</p>
+  </div>
+  <div class="slider-control">
+    <span class="slider-label">Broad</span>
+    <input type="range" id="thresholdSlider" min="0" max="100" value="0">
+    <span class="slider-label">Tight</span>
+    <span id="thresholdValue">0.40</span>
+  </div>
+</header>
+
+<div class="main">
+  <div id="graph">
+    <div id="loading"><span>Loading universe...</span></div>
+    <svg id="svg"></svg>
+    <div id="legend"></div>
+    <div id="hint">click a node · hover an edge</div>
+    <div id="tooltip"></div>
+  </div>
+
+  <div id="panel">
+    <button class="close-btn" id="closeBtn">✕</button>
+    <div class="panel-header">
+      <div class="panel-album" id="panelAlbum"></div>
+      <div class="panel-title" id="panelTitle"></div>
+      <div class="panel-year" id="panelYear"></div>
+    </div>
+    <div class="panel-section">
+      <div class="panel-section-label">Themes</div>
+      <div class="themes" id="panelThemes"></div>
+    </div>
+    <div class="panel-section" style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+      <div class="panel-section-label">Connected songs</div>
+      <div class="connections" id="panelConnections"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let allNodes = [], allEdges = [];
+let selectedId = null;
+let mutedAlbums = new Set();
+let simulation;
+let threshold = 0.4; // matches the pipeline default
+
+// Map weight (0-1) to a stroke colour — low weight is dark, high weight is bright blue
+function edgeColour(weight) {
+  const t = Math.min(Math.max(weight, 0), 1);
+  // Interpolate from #1a2535 (dark) → #5080a8 (bright blue-grey)
+  const r = Math.round(26 + t * (80 - 26));
+  const g = Math.round(37 + t * (128 - 37));
+  const b = Math.round(53 + t * (168 - 53));
+  return `rgb(${r},${g},${b})`;
+}
+
+function edgeOpacity(weight) {
+  return 0.3 + weight * 0.5;
+}
+
+fetch('graph_data.json')
+  .then(r => r.json())
+  .then(data => {
+    allNodes = data.nodes;
+    allEdges = data.edges || [];
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('headerStats').textContent =
+      `${allNodes.length} songs · ${allEdges.length} connections`;
+
+    buildLegend();
+    buildGraph();
+  });
+
+// ---------------------------------------------------------------------------
+// Legend
+// ---------------------------------------------------------------------------
+
+function buildLegend() {
+  const legend = document.getElementById('legend');
+  const albums = [...new Set(allNodes.map(n => n.album))];
+  albums.forEach(album => {
+    const colour = allNodes.find(n => n.album === album)?.colour || '#888';
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+    item.dataset.album = album;
+    item.innerHTML = `<div class="legend-dot" style="background:${colour}"></div><span>${album}</span>`;
+    item.addEventListener('click', () => toggleAlbum(album));
+    legend.appendChild(item);
+  });
+}
+
+function toggleAlbum(album) {
+  if (mutedAlbums.has(album)) mutedAlbums.delete(album);
+  else mutedAlbums.add(album);
+  document.querySelectorAll('.legend-item').forEach(el => {
+    el.classList.toggle('muted', mutedAlbums.has(el.dataset.album));
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  // Work out which nodes have at least one visible edge
+  const connectedIds = new Set();
+  allEdges.forEach(e => {
+    const s = e.source.id ?? e.source;
+    const t = e.target.id ?? e.target;
+    const srcNode = allNodes[s];
+    const tgtNode = allNodes[t];
+    if ((e.weight || 0) < threshold) return;
+    if (mutedAlbums.has(srcNode?.album) || mutedAlbums.has(tgtNode?.album)) return;
+    connectedIds.add(s);
+    connectedIds.add(t);
+  });
+
+  d3.selectAll('.node').style('display', d => {
+    if (mutedAlbums.has(d.album)) return 'none';
+    if (!connectedIds.has(d.id)) return 'none';
+    return null;
+  });
+
+  d3.selectAll('.link').style('display', e => {
+    const s = e.source.id ?? e.source;
+    const t = e.target.id ?? e.target;
+    const srcNode = allNodes[s];
+    const tgtNode = allNodes[t];
+    if ((e.weight || 0) < threshold) return 'none';
+    if (mutedAlbums.has(srcNode?.album) || mutedAlbums.has(tgtNode?.album)) return 'none';
+    return null;
+  }).style('stroke-opacity', e => edgeOpacity(e.weight || 0));
+}
+
+// ---------------------------------------------------------------------------
+// Graph
+// ---------------------------------------------------------------------------
+
+function buildGraph() {
+  const svg = d3.select('#svg');
+  const W = document.getElementById('graph').clientWidth;
+  const H = document.getElementById('graph').clientHeight;
+  svg.attr('viewBox', `0 0 ${W} ${H}`);
+
+  const g = svg.append('g');
+
+  svg.call(d3.zoom()
+    .scaleExtent([0.2, 4])
+    .on('zoom', e => g.attr('transform', e.transform)));
+
+  simulation = d3.forceSimulation(allNodes)
+    .force('link', d3.forceLink(allEdges)
+      .id(d => d.id)
+      .distance(d => 120 - (d.weight || 0) * 60)
+      .strength(d => (d.weight || 0) * 0.4))
+    .force('charge', d3.forceManyBody().strength(-120))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collision', d3.forceCollide(14));
+
+  const tooltip = document.getElementById('tooltip');
+
+  // Edges
+  const link = g.append('g').selectAll('line')
+    .data(allEdges)
+    .join('line')
+    .attr('class', 'link')
+    .style('stroke', d => edgeColour(d.weight || 0))
+    .style('stroke-opacity', d => edgeOpacity(d.weight || 0))
+    .style('stroke-width', d => Math.max(0.5, (d.weight || 0) * 4))
+    .style('cursor', 'crosshair')
+    .on('mousemove', (event, d) => {
+      const src = allNodes[d.source.id ?? d.source];
+      const tgt = allNodes[d.target.id ?? d.target];
+
+      const sharedHTML = (d.shared_themes || []).length
+        ? (d.shared_themes).map(t => `<span class="tooltip-theme">${t}</span>`).join('')
+        : '<span style="font-size:18px;color:var(--text-dim)">none</span>';
+
+      tooltip.innerHTML = `
+        <div class="tooltip-songs">${src.title} <span>&</span> ${tgt.title}</div>
+        <div class="tooltip-label">Connection strength</div>
+        <div style="font-family:'Space Mono',monospace;font-size:20px;color:var(--text-dim);margin-bottom:10px">
+          ${Math.round((d.weight || 0) * 100)}% · lyrical ${Math.round((d.lyrical || 0) * 100)}% · thematic ${Math.round((d.thematic || 0) * 100)}%
+        </div>
+        <div class="tooltip-label">Shared themes</div>
+        <div class="tooltip-themes">${sharedHTML}</div>
+      `;
+      tooltip.style.left = `${Math.min(event.clientX + 14, window.innerWidth - 300)}px`;
+      tooltip.style.top = `${event.clientY - 10}px`;
+      tooltip.classList.add('visible');
+    })
+    .on('mouseleave', () => tooltip.classList.remove('visible'));
+
+  // Nodes
+  const node = g.append('g').selectAll('g')
+    .data(allNodes)
+    .join('g')
+    .attr('class', 'node')
+    .call(d3.drag()
+      .on('start', (e, d) => { if (!e.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+      .on('drag', (e, d) => { d.fx = e.x; d.fy = e.y; })
+      .on('end', (e, d) => { if (!e.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }))
+    .on('click', (event, d) => { event.stopPropagation(); selectNode(d); });
+
+  node.append('circle').attr('r', 6).attr('fill', d => d.colour);
+  node.append('text').attr('x', 9).attr('y', 4).text(d => d.title);
+
+  svg.on('click', () => deselect());
+
+  simulation.on('tick', () => {
+    link
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    node.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Selection
+// ---------------------------------------------------------------------------
+
+function selectNode(d) {
+  selectedId = d.id;
+  document.getElementById('hint').style.opacity = '0';
+
+  const connectedIds = new Set([d.id]);
+  allEdges.forEach(e => {
+    const s = e.source.id ?? e.source;
+    const t = e.target.id ?? e.target;
+    if (s === d.id || t === d.id) { connectedIds.add(s); connectedIds.add(t); }
+  });
+
+  d3.selectAll('.node')
+    .classed('selected', n => n.id === d.id)
+    .classed('dimmed', n => !connectedIds.has(n.id));
+
+  d3.selectAll('.link')
+    .classed('highlighted', e => {
+      const s = e.source.id ?? e.source;
+      const t = e.target.id ?? e.target;
+      return s === d.id || t === d.id;
+    })
+    .style('stroke-opacity', e => {
+      const s = e.source.id ?? e.source;
+      const t = e.target.id ?? e.target;
+      return s === d.id || t === d.id ? 1 : 0.03;
+    });
+
+  document.getElementById('panelAlbum').textContent = d.album;
+  document.getElementById('panelTitle').textContent = d.title;
+  document.getElementById('panelYear').textContent = d.year;
+  document.getElementById('panelThemes').innerHTML =
+    (d.themes || []).map(t => `<span class="theme-tag">${t}</span>`).join('');
+
+  const connections = allEdges
+    .filter(e => (e.source.id ?? e.source) === d.id || (e.target.id ?? e.target) === d.id)
+    .map(e => {
+      const otherId = (e.source.id ?? e.source) === d.id
+        ? (e.target.id ?? e.target) : (e.source.id ?? e.source);
+      return { node: allNodes[otherId], weight: e.weight, lyrical: e.lyrical, thematic: e.thematic, sharedThemes: e.shared_themes || [] };
+    })
+    .sort((a, b) => b.weight - a.weight);
+
+  document.getElementById('panelConnections').innerHTML = connections.map(({ node: n, weight, lyrical, thematic, sharedThemes }) => {
+    const meta = [
+      sharedThemes.length ? `${sharedThemes.length} shared theme${sharedThemes.length > 1 ? 's' : ''}` : '',
+      lyrical ? `${Math.round(lyrical * 100)}% lyrical` : '',
+    ].filter(Boolean).join(' · ');
+
+    return `<div class="connection-item" data-id="${n.id}">
+      <div class="connection-dot" style="background:${n.colour}"></div>
+      <div class="connection-info">
+        <div class="connection-title">${n.title}</div>
+        <div class="connection-meta">${n.album} · ${meta}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  document.getElementById('panelConnections').querySelectorAll('.connection-item').forEach(el => {
+    el.addEventListener('click', () => selectNode(allNodes[+el.dataset.id]));
+  });
+
+  document.getElementById('panel').classList.add('open');
+}
+
+function deselect() {
+  selectedId = null;
+  d3.selectAll('.node').classed('selected', false).classed('dimmed', false);
+  d3.selectAll('.link')
+    .classed('highlighted', false)
+    .style('stroke-opacity', d => edgeOpacity(d.weight || 0));
+  document.getElementById('panel').classList.remove('open');
+}
+
+document.getElementById('closeBtn').addEventListener('click', e => { e.stopPropagation(); deselect(); });
+
+const slider = document.getElementById('thresholdSlider');
+const thresholdDisplay = document.getElementById('thresholdValue');
+
+// Map slider 0-100 to weight range 0.4–0.9
+slider.addEventListener('input', function() {
+  threshold = 0.4 + (this.value / 100) * 0.5;
+  thresholdDisplay.textContent = threshold.toFixed(2);
+  applyFilters();
+});
+</script>
+
+</body>
+</html>
