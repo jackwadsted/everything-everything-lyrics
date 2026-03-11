@@ -11,7 +11,6 @@ import re
 import time
 from pathlib import Path
 
-import numpy as np
 import anthropic
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity

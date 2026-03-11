@@ -10,10 +10,8 @@ lyricsgenius for lyrics scraping (the only part it does reliably).
 
 import json
 import os
-import time
 from pathlib import Path
 
-import requests
 import lyricsgenius
 from dotenv import load_dotenv
 
